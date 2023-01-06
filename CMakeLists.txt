@@ -9,4 +9,4 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS true)
 set(CMAKE_CXX_FLAGS "-pthread -Ofast -flto -ffast-math -Wall -Wextra -Wno-unused-parameter -pedantic")
 set(CMAKE_EXE_LINKER_FLAGS "-Ofast -flto -ffast-math")
 
-add_executable(magnum_carl main.cpp)
+add_executable(magnum_carl bitboard.cpp board.cpp hash.cpp magic.cpp main.cpp)
