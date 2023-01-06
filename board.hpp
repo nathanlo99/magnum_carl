@@ -90,14 +90,14 @@ struct Board {
   static constexpr const char *white_empty_fen = "8/8/8/8/8/8/8/8 w - - 0 1";
   static constexpr const char *black_empty_fen = "8/8/8/8/8/8/8/8 b - - 0 1";
 
-  static constexpr const size_t max_moves_in_game = 2048;
+  static constexpr const size_t max_moves_in_game = 512;
   static constexpr const size_t max_moves_in_position = 256;
 
 public:
   // Standard data
   bool m_side_to_move = White;
-  uint16_t m_ply = 0;
   uint8_t m_fifty_move = 0;
+  uint16_t m_ply = 0;
   square_t m_en_passant_sq = InvalidSquare;
   castle_t m_castle_perms = 15;
   int m_material_evaluation = 0;
@@ -504,10 +504,6 @@ template <bool update_hash>
 void Board::move_piece(const piece_t piece, const square_t source,
                        const square_t target) {
   const int side = piece_side(piece);
-  // log_print("move_piece | " << piece_to_char(piece) << " from "
-  //                           << square_to_string(source) << " to "
-  //                           << square_to_string(target));
-  // log_print(*this);
   assert(get_bit(m_bitboards[piece], source));
   assert(get_bit(m_occupancies[side], source));
   assert(get_bit(m_occupancies[Both], source));

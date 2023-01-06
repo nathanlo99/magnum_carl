@@ -19,7 +19,7 @@
 
 #ifdef NDEBUG
 #define debug_only(expr)
-#define expect_equal(result, expected)
+#define expect_equal(result, expected) __builtin_assume(result == expected)
 #else
 #define debug_only(expr) expr
 #define expect_equal(result, expected)                                         \

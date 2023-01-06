@@ -237,8 +237,6 @@ bool Board::current_player_in_check() const {
 // Makes the supplied pseudo-legal move and returns true iff the move does not
 // place the king in check
 bool Board::make_move(const Move move) {
-  // log_print("make_move | start");
-  debug_only(check_invariants("before make " + move.to_long_string()));
   const int old_side = m_side_to_move, new_side = other_side(old_side);
   // NOTE: The captured piece will be filled in later by each capture move
   m_history[m_ply] = {m_hash, m_en_passant_sq, InvalidPiece, m_fifty_move,
@@ -302,16 +300,12 @@ bool Board::make_move(const Move move) {
   const square_t king_square =
       lsb(m_bitboards[sided_piece(old_side, WhiteKing)]);
 
-  debug_only(check_invariants("after make: " + move.to_long_string()));
-  // log_print("make_move | done");
   return new_side == White ? !is_square_attacked<White>(king_square)
                            : !is_square_attacked<Black>(king_square);
 }
 
 // Given the pseudo-legal move that was just played, unmake the move
 void Board::unmake_move(const Move move) {
-  // log_print("unmake_move | start " << move.to_long_string());
-  debug_only(check_invariants("before unmake: " + move.to_long_string()));
   assert(m_ply > 0);
 
   const int new_side = m_side_to_move, old_side = other_side(new_side);
@@ -357,9 +351,6 @@ void Board::unmake_move(const Move move) {
   m_castle_perms = history.castle_perms;
   m_en_passant_sq = history.en_passant;
   m_hash = history.hash;
-
-  debug_only(check_invariants("after unmake: " + move.to_long_string()));
-  // log_print("unmake_move | done " << move.to_long_string());
 }
 
 hash_t Board::compute_hash_slow() const {
@@ -406,16 +397,16 @@ void Board::check_invariants(const std::string &description) const {
   expect_equal(m_occupancies[White] & m_occupancies[Black], 0ULL);
 
   bitboard_t white_pieces = 0ULL;
-  for (piece_t piece = WhitePawn; piece <= WhiteQueen; ++piece) {
+  for (piece_t piece = WhitePawn; piece <= WhiteKing; ++piece) {
     white_pieces |= m_bitboards[piece];
   }
-  assert(white_pieces == m_occupancies[White]);
+  expect_equal(white_pieces, m_occupancies[White]);
 
   bitboard_t black_pieces = 0ULL;
-  for (piece_t piece = BlackPawn; piece <= BlackQueen; ++piece) {
+  for (piece_t piece = BlackPawn; piece <= BlackKing; ++piece) {
     black_pieces |= m_bitboards[piece];
   }
-  assert(black_pieces == m_occupancies[Black]);
+  expect_equal(black_pieces, m_occupancies[Black]);
 
   for (square_t sq = 0; sq < 64; ++sq) {
     if (!get_bit(m_occupancies[Both], sq))
@@ -429,7 +420,7 @@ void Board::check_invariants(const std::string &description) const {
                     << piece_to_char(piece) << " at square "
                     << square_to_string(sq) << std::endl;
         }
-        assert(found_piece == InvalidPiece);
+        expect_equal(found_piece, InvalidPiece);
         found_piece = piece;
       }
     }
@@ -459,7 +450,6 @@ void Board::check_invariants(const std::string &description) const {
 // pseudo-legal moves, then making each to check which of them do not leave the
 // king in check
 Move *Board::legal_moves(Move *list) {
-  // log_print("legal_moves | start");
   std::array<Move, Board::max_moves_in_position> moves;
   Move *start_ptr = &moves[0], *end_ptr = nullptr;
 
@@ -471,29 +461,11 @@ Move *Board::legal_moves(Move *list) {
       *list++ = move;
     unmake_move(move);
   }
-  // log_print("legal_moves | done");
-  return list;
-}
-
-Move *Board::legal_captures(Move *list) {
-  log_print("legal_captures");
-  std::array<Move, Board::max_moves_in_position> pseudo_moves;
-  Move *start_ptr = &pseudo_moves[0],
-       *end_ptr = m_side_to_move == White ? pseudo_captures<White>(start_ptr)
-                                          : pseudo_captures<Black>(start_ptr);
-
-  for (Move *move_ptr = start_ptr; move_ptr < end_ptr; ++move_ptr) {
-    const Move &move = *move_ptr;
-    if (make_move(move))
-      *list++ = move;
-    unmake_move(move);
-  }
-
   return list;
 }
 
 bool Board::is_drawn_by_fifty_move() const {
-  return m_ply > 2000 || m_fifty_move >= 100;
+  return m_ply >= Board::max_moves_in_game || m_fifty_move >= 100;
 }
 
 int Board::repeat_count() const {
