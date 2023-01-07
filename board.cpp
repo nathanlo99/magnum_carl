@@ -177,7 +177,6 @@ std::ostream &Board::print(std::ostream &os) const {
   os << "50-move  :  " << static_cast<int>(m_fifty_move) << "\n";
   os << "Repeat   :  " << repeat_count() << "\n";
   os << "Ply      :  " << static_cast<int>(m_ply) << "\n";
-  os << "Material :  " << m_material_evaluation << "\n";
   const int static_evaluation = static_evaluate(),
             white_static_evaluation = m_side_to_move == White
                                           ? static_evaluation
@@ -190,17 +189,20 @@ std::ostream &Board::print(std::ostream &os) const {
   return os << std::flush;
 }
 
-int Board::get_piece_value(const piece_t piece, const square_t square) const {
-  // For a black piece, change its colour, flip the square, and negate its value
-  if (piece >= 6) {
-    return -default_piece_square_table[piece - 6][square ^ 56];
-  } else {
-    return default_piece_square_table[piece][square];
-  }
+inline int Board::get_piece_value(const piece_t piece,
+                                  const square_t square) const {
+  return piece_square_table[piece][square];
 }
 
 int Board::static_evaluate() const {
-  int evaluation = m_material_evaluation;
+  int evaluation = 0;
+  for (piece_t piece = WhitePawn; piece <= BlackKing; ++piece) {
+    bitboard_t bitboard = m_bitboards[piece];
+    while (bitboard) {
+      const square_t sq = pop_bit(bitboard);
+      evaluation += get_piece_value(piece, sq);
+    }
+  }
   return m_side_to_move == White ? evaluation : -evaluation;
 }
 
@@ -432,15 +434,6 @@ void Board::check_invariants(const std::string &description) const {
     assert(found_piece != InvalidPiece);
   }
 
-  int material_evaluation = 0;
-  for (piece_t piece = 0; piece < InvalidPiece; ++piece) {
-    bitboard_t piece_bitboard = m_bitboards[piece];
-    while (piece_bitboard) {
-      const square_t sq = pop_bit(piece_bitboard);
-      material_evaluation += get_piece_value(piece, sq);
-    }
-  }
-  expect_equal(m_material_evaluation, material_evaluation);
   expect_equal(m_hash, compute_hash_slow());
 
 #endif
@@ -462,6 +455,21 @@ Move *Board::legal_moves(Move *list) {
     unmake_move(move);
   }
   return list;
+}
+
+std::vector<Move> Board::legal_moves_slow() {
+  std::vector<Move> result;
+  std::array<Move, Board::max_moves_in_position> moves;
+  Move *start_ptr = &moves[0], *end_ptr = m_side_to_move == White
+                                              ? pseudo_moves<White>(start_ptr)
+                                              : pseudo_moves<Black>(start_ptr);
+  for (Move *move_ptr = start_ptr; move_ptr < end_ptr; ++move_ptr) {
+    const Move &move = *move_ptr;
+    if (make_move(move))
+      result.push_back(move);
+    unmake_move(move);
+  }
+  return result;
 }
 
 bool Board::is_drawn_by_fifty_move() const {

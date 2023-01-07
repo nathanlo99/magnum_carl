@@ -100,7 +100,6 @@ public:
   uint16_t m_ply = 0;
   square_t m_en_passant_sq = InvalidSquare;
   castle_t m_castle_perms = 15;
-  int m_material_evaluation = 0;
 
   std::array<bitboard_t, 12> m_bitboards = {0};
   std::array<bitboard_t, 3> m_occupancies = {0};
@@ -147,6 +146,7 @@ public:
   // other member variable mutable
   Move *legal_moves(Move *list);
   Move *legal_captures(Move *list);
+  std::vector<Move> legal_moves_slow();
 
   hash_t compute_hash_slow() const;
   void check_invariants(const std::string &message = "") const;
@@ -515,8 +515,6 @@ void Board::move_piece(const piece_t piece, const square_t source,
   m_bitboards[piece] ^= toggle;
   m_occupancies[side] ^= toggle;
   m_occupancies[Both] ^= toggle;
-  m_material_evaluation -= get_piece_value(piece, source);
-  m_material_evaluation += get_piece_value(piece, target);
   if constexpr (update_hash)
     m_hash ^= piece_keys[piece][source] ^ piece_keys[piece][target];
 }
@@ -532,7 +530,6 @@ void Board::place_piece(const piece_t piece, const square_t sq) {
   set_bit(m_bitboards[piece], sq);
   set_bit(m_occupancies[side], sq);
   set_bit(m_occupancies[Both], sq);
-  m_material_evaluation += get_piece_value(piece, sq);
   if constexpr (update_hash)
     m_hash ^= piece_keys[piece][sq];
 }
@@ -562,7 +559,6 @@ void Board::remove_piece(const piece_t piece, const square_t sq) {
   unset_bit(m_bitboards[piece], sq);
   unset_bit(m_occupancies[side], sq);
   unset_bit(m_occupancies[Both], sq);
-  m_material_evaluation -= get_piece_value(piece, sq);
   if constexpr (update_hash)
     m_hash ^= piece_keys[piece][sq];
 }
