@@ -67,7 +67,7 @@ class MoveHeap {
     MoveHeapIterator(MoveHeap &heap, const size_t start_idx)
         : m_heap(heap), m_start_idx(start_idx) {}
 
-    const Move &operator*() const {
+    inline Move operator*() const {
       // Get the move with the highest score in data[start_idx..] and move it to
       // index start_idx
       const auto it = std::max_element(
@@ -81,12 +81,12 @@ class MoveHeap {
       return m_heap.data[m_start_idx].first;
     }
 
-    MoveHeapIterator &operator++() {
+    inline MoveHeapIterator &operator++() {
       m_start_idx++;
       return *this;
     }
 
-    bool operator!=(const MoveHeapIterator &other) const {
+    inline bool operator!=(const MoveHeapIterator &other) const {
       return m_start_idx != other.m_start_idx;
     }
   };
@@ -112,9 +112,9 @@ public:
     }
   }
 
-  auto begin() { return MoveHeapIterator(*this, 0); }
-  auto end() { return MoveHeapIterator(*this, num_moves); }
-  auto empty() const { return num_moves == 0; }
+  inline auto begin() { return MoveHeapIterator(*this, 0); }
+  inline auto end() { return MoveHeapIterator(*this, num_moves); }
+  inline auto empty() const { return num_moves == 0; }
 };
 
 inline int quiescence_evaluate(Board &board, int current_depth, int alpha,
@@ -124,9 +124,14 @@ inline int quiescence_evaluate(Board &board, int current_depth, int alpha,
   if (board.is_drawn_by_insufficient_material()) [[unlikely]]
     return DrawScore;
 
+  const int stand_pat_score = board.static_evaluate();
+  if (stand_pat_score >= beta)
+    return beta;
+  if (stand_pat_score > alpha)
+    alpha = stand_pat_score;
+
   // Generate pseudo-captures and filter them later
   std::array<Move, Board::max_moves_in_position> moves;
-
   Move *start_ptr = &moves[0],
        *end_ptr = board.pseudo_captures_and_promotions(start_ptr);
 
@@ -145,7 +150,7 @@ inline int quiescence_evaluate(Board &board, int current_depth, int alpha,
 
     // If there are no captures, but it isn't terminal, return the raw
     // material evaluation
-    return board.static_evaluate();
+    return stand_pat_score;
   }
 
   // Search only captures and pawn promotions
@@ -184,7 +189,7 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
     max_depth++;
 
   if (current_depth >= max_depth) [[unlikely]]
-    return quiescence_evaluate(board, current_depth, -MateScore, MateScore);
+    return quiescence_evaluate(board, current_depth, alpha, beta);
 
   // Probe transposition table for the PV move
   const Move tt_move = tt_probe_move(board.m_hash);
@@ -210,8 +215,17 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
   Move best_move;
   for (const auto &move : heap) {
     board.make_move(move);
-    const int score = -alpha_beta_evaluate(board, current_depth + 1, max_depth,
-                                           -beta, -alpha);
+    int score = 0;
+    if (have_improved_alpha) {
+      score = -alpha_beta_evaluate(board, current_depth + 1, max_depth,
+                                   -(alpha + 1), -alpha);
+      if (score > alpha && score < beta)
+        score = -alpha_beta_evaluate(board, current_depth + 1, max_depth, -beta,
+                                     -alpha);
+    } else {
+      score = -alpha_beta_evaluate(board, current_depth + 1, max_depth, -beta,
+                                   -alpha);
+    }
     board.unmake_move(move);
 
     if (score > alpha) {
@@ -237,7 +251,22 @@ inline Move alpha_beta_search(Board &board, int max_depth) {
   Move best_move;
   int alpha = -MateScore, beta = MateScore;
   for (int current_depth = 1; current_depth <= max_depth; ++current_depth) {
-    const int score = alpha_beta_evaluate(board, 0, current_depth, alpha, beta);
+    int score = 0, aspiration_window_size = 10;
+    while (true) {
+      score = alpha_beta_evaluate(board, 0, current_depth, alpha, beta);
+      if (score >= beta) {
+        beta = std::min(MateScore, beta + aspiration_window_size);
+        aspiration_window_size *= 2;
+      } else if (score <= alpha) {
+        alpha = std::max(-MateScore, alpha - aspiration_window_size);
+        aspiration_window_size *= 2;
+      } else {
+        alpha = score;
+        beta = score + 1;
+        break;
+      }
+    }
+
     const Move current_best_move = tt_probe_move(board.m_hash);
     if (current_best_move.is_valid())
       best_move = current_best_move;
