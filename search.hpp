@@ -11,7 +11,7 @@ inline int compute_move_score(Board &board, const Move tt_move, const Move move,
                               const bool move_resulted_in_captures) {
   int result = 0;
 
-  if (move == tt_move)
+  if (move == tt_move) [[unlikely]]
     return 2000;
 
   if (move.is_capture()) {
@@ -121,7 +121,7 @@ inline int quiescence_evaluate(Board &board, int current_depth, int alpha,
                                int beta) {
   // This is the only drawing condition other than stalemate we have to check
   // here, the others are reset by a capture or queen promotion
-  if (board.is_drawn_by_insufficient_material())
+  if (board.is_drawn_by_insufficient_material()) [[unlikely]]
     return DrawScore;
 
   // Generate pseudo-captures and filter them later
@@ -139,7 +139,7 @@ inline int quiescence_evaluate(Board &board, int current_depth, int alpha,
     // TODO: Replace this with legal_quiet_moves if more efficient?
     // NOTE: Since we already know that there are no legal captures
     end_ptr = board.legal_moves(start_ptr);
-    if (start_ptr == end_ptr)
+    if (start_ptr == end_ptr) [[unlikely]]
       return board.current_player_in_check() ? -MateScore + current_depth
                                              : DrawScore;
 
@@ -172,7 +172,7 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
   // it in QS, since every capture and queen promotion will reset these counters
   const auto &[has_simple_eval, simple_eval] =
       board.compute_simple_evaluation();
-  if (has_simple_eval) {
+  if (has_simple_eval) [[unlikely]] {
     log_print("alpha_beta_evaluate | done - simple_eval");
     return simple_eval;
   }
@@ -183,7 +183,7 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
   if (in_check)
     max_depth++;
 
-  if (current_depth >= max_depth)
+  if (current_depth >= max_depth) [[unlikely]]
     return quiescence_evaluate(board, current_depth, -MateScore, MateScore);
 
   // Probe transposition table for the PV move
@@ -201,7 +201,7 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
 
   MoveHeap heap(board, tt_move, start_ptr, end_ptr);
   // No legal moves: the game has ended in either a checkmate or stalemate
-  if (heap.empty()) {
+  if (heap.empty()) [[unlikely]] {
     log_print("alpha_beta_evaluate | done - terminal");
     return in_check ? -MateScore + current_depth : DrawScore;
   }
@@ -231,4 +231,16 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
            have_improved_alpha ? TTEntryExact : TTEntryAlpha, alpha, best_move);
 
   return alpha;
+}
+
+inline Move alpha_beta_search(Board &board, int max_depth) {
+  Move best_move;
+  int alpha = -MateScore, beta = MateScore;
+  for (int current_depth = 1; current_depth <= max_depth; ++current_depth) {
+    const int score = alpha_beta_evaluate(board, 0, current_depth, alpha, beta);
+    const Move current_best_move = tt_probe_move(board.m_hash);
+    if (current_best_move.is_valid())
+      best_move = current_best_move;
+  }
+  return best_move;
 }

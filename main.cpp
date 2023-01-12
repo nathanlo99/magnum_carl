@@ -30,14 +30,21 @@ inline void print_debug_info() {
 
   // run_perft_tests("tests/short_perft.txt");
 
+  Board start_pos;
+  std::cout << start_pos << std::endl;
+
   // Board board(
   //     "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0
   //     1");
   Board board;
   for (int depth = 1; depth < 10; ++depth) {
-    const int result =
+    const auto start_ms = get_time_ms();
+    const Move move = alpha_beta_search(board, depth);
+    const int score =
         alpha_beta_evaluate(board, 0, depth, -MateScore, MateScore);
-    std::cout << "Evaluation to depth " << depth << " was " << result
+    const auto end_ms = get_time_ms(), elapsed_ms = end_ms - start_ms;
+    std::cout << "Best move at depth " << depth << " was " << move
+              << " with score " << score << ", took " << elapsed_ms << " ms"
               << std::endl;
   }
 }
