@@ -14,6 +14,7 @@
 #include "magic.hpp"
 #include "move.hpp"
 #include "piece.hpp"
+#include "search.hpp"
 #include "square.hpp"
 #include "util.hpp"
 
@@ -547,6 +548,14 @@ bool Board::is_drawn_by_insufficient_material() const {
   // 1. Kb6 Nb8   2. Bb7#
 
   return false;
+}
+
+std::pair<bool, int> Board::compute_simple_evaluation() const {
+  if (is_drawn_by_fifty_move() || is_drawn_by_repetition() ||
+      is_drawn_by_insufficient_material())
+    return {true, DrawScore};
+
+  return {false, 0};
 }
 
 GameResult Board::check_result() {

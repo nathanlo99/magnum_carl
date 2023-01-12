@@ -3,7 +3,9 @@
 #include "board.hpp"
 #include "perft.hpp"
 #include "random.hpp"
+#include "search.hpp"
 #include "tests/test_perft.hpp"
+#include "transposition_table.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -26,19 +28,17 @@ inline void print_debug_info() {
   std::cout << "sizeof(bitboard_t) = " << sizeof(bitboard_t) << std::endl;
   std::cout << std::endl;
 
-  run_perft_tests("tests/short_perft.txt");
+  // run_perft_tests("tests/short_perft.txt");
 
+  // Board board(
+  //     "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0
+  //     1");
   Board board;
-  std::cout << board << std::endl;
-
-  while (board.check_result() == InProgress) {
-    const auto moves = board.legal_moves_slow();
-    const auto move_idx = random_uint64() % moves.size();
-    const auto move = moves[move_idx];
-    board.make_move(move);
-
-    std::cout << board << std::endl;
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  for (int depth = 1; depth < 10; ++depth) {
+    const int result =
+        alpha_beta_evaluate(board, 0, depth, -MateScore, MateScore);
+    std::cout << "Evaluation to depth " << depth << " was " << result
+              << std::endl;
   }
 }
 

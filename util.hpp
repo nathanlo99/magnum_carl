@@ -7,6 +7,12 @@
 #include <cstring>
 #include <iostream>
 
+// Any number bigger than 2 * 16 * 900 = 28K, the maximum material evaluation
+constexpr int MateScore = 50000;
+constexpr int MaxMateDepth = 1000; // Maximum number of plies to mate
+constexpr int DrawScore = -25;     // Negative for contempt
+constexpr int UnknownScore = 69420;
+
 #define __SHORT_FILE__ strrchr("/" __FILE__, '/') + 1
 
 #ifdef LOG

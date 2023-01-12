@@ -23,6 +23,9 @@ enum Piece {
   InvalidPiece = 12,
 };
 
+constexpr std::array<int, 12> normalized_piece_value_table = {0, 1, 2, 3, 4, 5,
+                                                              0, 1, 2, 3, 4, 5};
+
 constexpr std::array<std::array<int, 64>, 12> piece_square_table = {
     // WhitePawn
     std::array<int, 64>{
