@@ -91,7 +91,7 @@ inline Move tt_probe_move(const hash_t hash) {
   log_print("tt_probe(" << std::hex << std::setw(16) << std::setfill('0')
                         << hash << std::dec << std::setfill(' ') << ")");
   const tt_entry_t &entry = tt_index(hash);
-  if (entry.hash != hash)
+  if (entry.hash != hash) [[unlikely]]
     return Move();
   return entry.move;
 }
@@ -107,7 +107,7 @@ inline int tt_probe_score(const hash_t hash, const int current_depth,
                           const int max_depth, const int alpha,
                           const int beta) {
   const tt_entry_t &entry = tt_index(hash);
-  if (entry.hash != hash)
+  if (entry.hash != hash) [[unlikely]]
     return UnknownScore;
   const int remaining_depth = max_depth - current_depth;
   if (remaining_depth > entry.remaining_depth)

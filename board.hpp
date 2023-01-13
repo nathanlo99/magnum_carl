@@ -49,22 +49,6 @@ constexpr inline std::string_view result_to_string(const GameResult result) {
   return "Unknown result";
 }
 
-constexpr inline double result_to_double(const GameResult result) {
-  switch (result) {
-  case WhiteCheckmate:
-    return 1.0;
-  case BlackCheckmate:
-    return -1.0;
-  case Stalemate:
-  case DrawByRepetition:
-  case DrawByFiftyMove:
-  case DrawByInsufficientMaterial:
-    return 0.0;
-  default:
-    return -1000.0;
-  }
-}
-
 struct History {
   // Set the default values to clearly invalid states for debugging purposes
   hash_t hash = 0ULL;

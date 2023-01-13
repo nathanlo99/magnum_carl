@@ -15,6 +15,7 @@ inline void init_all() {
   init_bitboards();
   init_slider_attack_tables();
   init_hash_keys();
+  tt_clear();
 }
 
 inline void print_debug_info() {
@@ -28,24 +29,13 @@ inline void print_debug_info() {
   std::cout << "sizeof(bitboard_t) = " << sizeof(bitboard_t) << std::endl;
   std::cout << std::endl;
 
-  // run_perft_tests("tests/short_perft.txt");
-
-  Board start_pos;
-  std::cout << start_pos << std::endl;
-
-  // Board board(
-  //     "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0
-  //     1");
   Board board;
-  for (int depth = 1; depth < 10; ++depth) {
-    const auto start_ms = get_time_ms();
-    const Move move = alpha_beta_search(board, depth);
-    const int score =
-        alpha_beta_evaluate(board, 0, depth, -MateScore, MateScore);
-    const auto end_ms = get_time_ms(), elapsed_ms = end_ms - start_ms;
-    std::cout << "Best move at depth " << depth << " was " << move
-              << " with score " << score << ", took " << elapsed_ms << " ms"
-              << std::endl;
+  std::cout << board << std::endl;
+  while (board.check_result() == InProgress) {
+    const Move best_move = alpha_beta_search(board, 9);
+    board.make_move(best_move);
+    std::cout << board << std::endl;
+    std::cout << best_move << std::endl;
   }
 }
 

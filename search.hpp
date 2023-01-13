@@ -6,6 +6,22 @@
 
 #include <algorithm>
 
+inline std::string score_to_string(const int score) {
+  // return "cp " + std::to_string(score);
+  if (score > MateScore - MaxMateDepth) {
+    const int distance_to_mate = MateScore - score;
+    return "mate " + std::to_string(distance_to_mate / 2 + 1);
+  } else if (score < -MateScore + MaxMateDepth) {
+    const int distance_to_mate = MateScore + score;
+    return "mated " + std::to_string(distance_to_mate / 2);
+  } else {
+    return "cp " + std::to_string(score);
+  }
+}
+
+// Given a board, the current move stored in the transposition table, and some
+// flags indicating interesting things about the move, compute its move-ordering
+// score
 inline int compute_move_score(Board &board, const Move tt_move, const Move move,
                               const bool move_resulted_in_check,
                               const bool move_resulted_in_captures) {
@@ -15,6 +31,7 @@ inline int compute_move_score(Board &board, const Move tt_move, const Move move,
     return 2000;
 
   if (move.is_capture()) {
+    result += 1000;
     // The largest contribution from captures + promotions is
     //  40 if a queen is captured
     //  10 if captured by a pawn
@@ -22,7 +39,8 @@ inline int compute_move_score(Board &board, const Move tt_move, const Move move,
     // ---
     // 450 in total
     if (move.type == EnPassant) {
-      return 90;
+      result += 90;
+      return result;
     } else {
       const piece_t moved_piece = move.moved_piece,
                     captured_piece = board.piece_at_slow(move.target);
@@ -250,19 +268,19 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
 inline Move alpha_beta_search(Board &board, int max_depth) {
   Move best_move;
   int alpha = -MateScore, beta = MateScore;
-  for (int current_depth = 1; current_depth <= max_depth; ++current_depth) {
+  for (int depth = 1; depth <= max_depth; ++depth) {
     int score = 0, aspiration_window_size = 10;
     while (true) {
-      score = alpha_beta_evaluate(board, 0, current_depth, alpha, beta);
+      score = alpha_beta_evaluate(board, 0, depth, alpha, beta);
       if (score >= beta) {
         beta = std::min(MateScore, beta + aspiration_window_size);
-        aspiration_window_size *= 2;
+        aspiration_window_size *= 4;
       } else if (score <= alpha) {
         alpha = std::max(-MateScore, alpha - aspiration_window_size);
-        aspiration_window_size *= 2;
+        aspiration_window_size *= 4;
       } else {
-        alpha = score;
-        beta = score + 1;
+        alpha = std::max(-MateScore, score - 10);
+        beta = std::min(MateScore, score + 10);
         break;
       }
     }
@@ -270,6 +288,15 @@ inline Move alpha_beta_search(Board &board, int max_depth) {
     const Move current_best_move = tt_probe_move(board.m_hash);
     if (current_best_move.is_valid())
       best_move = current_best_move;
+
+    std::cout << "depth " << depth << " pv_move " << best_move << " score "
+              << score_to_string(score) << std::endl;
+
+    // Don't search deeper than the best mating sequence we've found so far
+    // NOTE: If anything goes wrong with mating evaluations, remove this line
+    // first before debugging
+    if (score > MateScore - depth || score < -MateScore + depth)
+      break;
   }
   return best_move;
 }
