@@ -6,6 +6,29 @@
 
 #include <algorithm>
 
+static std::atomic<bool> always_false = false;
+
+struct search_info_t {
+  long long start_time, stop_time;
+  size_t num_nodes = 0;
+  bool stopped = false;
+  std::atomic<bool> &force_stop;
+
+  search_info_t(const int search_ms = 100'000'000)
+      : start_time(get_time_ms()), stop_time(start_time + search_ms),
+        force_stop(always_false) {}
+  search_info_t(std::atomic<bool> &force_stop)
+      : start_time(get_time_ms()), stop_time(start_time + 100'000'000),
+        force_stop(force_stop) {}
+
+  inline void check_time() {
+    if (!stopped && (num_nodes & 2047) == 0)
+      stopped = get_time_ms() >= stop_time;
+  }
+
+  inline bool should_stop() const { return force_stop || stopped; }
+};
+
 inline std::string score_to_string(const int score) {
   // return "cp " + std::to_string(score);
   if (score > MateScore - MaxMateDepth) {
@@ -135,8 +158,8 @@ public:
   inline auto empty() const { return num_moves == 0; }
 };
 
-inline int quiescence_evaluate(Board &board, int current_depth, int alpha,
-                               int beta) {
+inline int quiescence_evaluate(Board &board, search_info_t &search_info,
+                               int current_depth, int alpha, int beta) {
   // This is the only drawing condition other than stalemate we have to check
   // here, the others are reset by a capture or queen promotion
   if (board.is_drawn_by_insufficient_material()) [[unlikely]]
@@ -174,8 +197,8 @@ inline int quiescence_evaluate(Board &board, int current_depth, int alpha,
   // Search only captures and pawn promotions
   for (const auto &move : heap) {
     board.make_move(move);
-    const int score =
-        -quiescence_evaluate(board, current_depth + 1, -beta, -alpha);
+    const int score = -quiescence_evaluate(board, search_info,
+                                           current_depth + 1, -beta, -alpha);
     board.unmake_move(move);
 
     if (score >= beta)
@@ -187,8 +210,9 @@ inline int quiescence_evaluate(Board &board, int current_depth, int alpha,
 }
 
 // Fail-soft alpha-beta
-inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
-                               int alpha, int beta) {
+inline int alpha_beta_evaluate(Board &board, search_info_t &search_info,
+                               int current_depth, int max_depth, int alpha,
+                               int beta) {
 
   // This checks draws by repetition, fifty moves, and insufficient material, so
   // make sure to check this before quiescence_evaluate so we can skip checking
@@ -200,6 +224,12 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
     return simple_eval;
   }
 
+  search_info.num_nodes++;
+
+  search_info.check_time();
+  if (current_depth >= 2 && search_info.should_stop())
+    return 0;
+
   // Extend the search if the current player is in check, to further explore
   // forcing situations
   const bool in_check = board.current_player_in_check();
@@ -207,7 +237,7 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
     max_depth++;
 
   if (current_depth >= max_depth) [[unlikely]]
-    return quiescence_evaluate(board, current_depth, alpha, beta);
+    return quiescence_evaluate(board, search_info, current_depth, alpha, beta);
 
   // Probe transposition table for the PV move
   const Move tt_move = tt_probe_move(board.m_hash);
@@ -235,14 +265,14 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
     board.make_move(move);
     int score = 0;
     if (have_improved_alpha) {
-      score = -alpha_beta_evaluate(board, current_depth + 1, max_depth,
-                                   -(alpha + 1), -alpha);
+      score = -alpha_beta_evaluate(board, search_info, current_depth + 1,
+                                   max_depth, -(alpha + 1), -alpha);
       if (score > alpha && score < beta)
-        score = -alpha_beta_evaluate(board, current_depth + 1, max_depth, -beta,
-                                     -alpha);
+        score = -alpha_beta_evaluate(board, search_info, current_depth + 1,
+                                     max_depth, -beta, -alpha);
     } else {
-      score = -alpha_beta_evaluate(board, current_depth + 1, max_depth, -beta,
-                                   -alpha);
+      score = -alpha_beta_evaluate(board, search_info, current_depth + 1,
+                                   max_depth, -beta, -alpha);
     }
     board.unmake_move(move);
 
@@ -252,26 +282,31 @@ inline int alpha_beta_evaluate(Board &board, int current_depth, int max_depth,
       best_move = move;
 
       if (score >= beta) {
-        tt_write(board.m_hash, current_depth, max_depth, TTEntryBeta, score,
-                 move);
+        if (!search_info.should_stop())
+          tt_write(board.m_hash, current_depth, max_depth, TTEntryBeta, score,
+                   move);
         return beta;
       }
     }
   }
 
-  tt_write(board.m_hash, current_depth, max_depth,
-           have_improved_alpha ? TTEntryExact : TTEntryAlpha, alpha, best_move);
+  if (!search_info.should_stop())
+    tt_write(board.m_hash, current_depth, max_depth,
+             have_improved_alpha ? TTEntryExact : TTEntryAlpha, alpha,
+             best_move);
 
   return alpha;
 }
 
-inline Move alpha_beta_search(Board &board, int max_depth) {
+inline Move alpha_beta_search(Board &board, int max_depth,
+                              int search_ms = 100'000'000) {
+  search_info_t search_info(search_ms);
   Move best_move;
   int alpha = -MateScore, beta = MateScore;
   for (int depth = 1; depth <= max_depth; ++depth) {
     int score = 0, aspiration_window_size = 10;
     while (true) {
-      score = alpha_beta_evaluate(board, 0, depth, alpha, beta);
+      score = alpha_beta_evaluate(board, search_info, 0, depth, alpha, beta);
       if (score >= beta) {
         beta = std::min(MateScore, beta + aspiration_window_size);
         aspiration_window_size *= 4;

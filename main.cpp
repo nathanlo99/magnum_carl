@@ -32,7 +32,7 @@ inline void print_debug_info() {
   Board board;
   std::cout << board << std::endl;
   while (board.check_result() == InProgress) {
-    const Move best_move = alpha_beta_search(board, 9);
+    const Move best_move = alpha_beta_search(board, 100, 1000);
     board.make_move(best_move);
     std::cout << board << std::endl;
     std::cout << best_move << std::endl;
