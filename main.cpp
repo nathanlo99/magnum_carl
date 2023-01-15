@@ -6,6 +6,7 @@
 #include "search.hpp"
 #include "tests/test_perft.hpp"
 #include "transposition_table.hpp"
+#include "uci.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -32,7 +33,7 @@ inline void print_debug_info() {
   Board board;
   std::cout << board << std::endl;
   while (board.check_result() == InProgress) {
-    const Move best_move = alpha_beta_search(board, 100, 1000);
+    const Move best_move = alpha_beta_search(board, 100, 10'000);
     board.make_move(best_move);
     std::cout << board << std::endl;
     std::cout << best_move << std::endl;
@@ -41,5 +42,14 @@ inline void print_debug_info() {
 
 int main(int argc, char *argv[]) {
   init_all();
-  print_debug_info();
+
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    if (line == "debug")
+      print_debug_info();
+    else if (line == "uci")
+      uci_loop(std::cin, std::cout);
+    else
+      std::cout << "Unknown command: " << line << std::endl;
+  }
 }

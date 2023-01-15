@@ -227,7 +227,7 @@ inline int alpha_beta_evaluate(Board &board, search_info_t &search_info,
   search_info.num_nodes++;
 
   search_info.check_time();
-  if (current_depth >= 2 && search_info.should_stop())
+  if (current_depth >= 2 && search_info.should_stop()) [[unlikely]]
     return 0;
 
   // Extend the search if the current player is in check, to further explore
@@ -307,6 +307,9 @@ inline Move alpha_beta_search(Board &board, int max_depth,
     int score = 0, aspiration_window_size = 10;
     while (true) {
       score = alpha_beta_evaluate(board, search_info, 0, depth, alpha, beta);
+      if (depth >= 2 && search_info.should_stop()) [[unlikely]]
+        return best_move;
+
       if (score >= beta) {
         beta = std::min(MateScore, beta + aspiration_window_size);
         aspiration_window_size *= 4;
@@ -333,5 +336,6 @@ inline Move alpha_beta_search(Board &board, int max_depth,
     if (score > MateScore - depth || score < -MateScore + depth)
       break;
   }
+
   return best_move;
 }

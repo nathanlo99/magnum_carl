@@ -53,10 +53,7 @@ struct tt_entry_t {
 
 extern std::unordered_map<hash_t, tt_entry_t> transposition_table;
 
-inline void tt_clear() {
-  log() << "tt_clear()" << std::endl;
-  transposition_table.clear();
-}
+inline void tt_clear() { transposition_table.clear(); }
 inline tt_entry_t &tt_index(const hash_t hash) {
   return transposition_table[hash];
 }
