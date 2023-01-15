@@ -2,8 +2,10 @@
 #pragma once
 
 #include <iostream>
+#include <limits>
 
 #include "board.hpp"
+#include "search.hpp"
 
 inline std::vector<std::string> split(const std::string &line) {
   std::vector<std::string> result;
@@ -43,41 +45,124 @@ inline Move find_uci_move(const Board &board, const std::string &move_str) {
   std::terminate();
 }
 
-inline void uci_loop(std::istream &in, std::ostream &out) {
-  out << "id name magnum_carl" << std::endl;
-  out << "id author Nathan Lo" << std::endl;
-  out << "uciok" << std::endl;
+struct UCI {
+  struct GoCommand {
+    bool ponder = false;
+    int wtime_ms = std::numeric_limits<int>::max();
+    int btime_ms = std::numeric_limits<int>::max();
+    int winc_ms = 0;
+    int binc_ms = 0;
+    int search_ms = -1;
+    int moves_to_go = 0;
+    int max_depth = Board::max_moves_in_game;
+    long long max_nodes = std::numeric_limits<long long>::max();
 
-  std::string line, last_position_line = "";
-  Board board;
-  bool is_new_game = true;
-  while (std::getline(in, line)) {
+    friend std::ostream &operator<<(std::ostream &os,
+                                    const GoCommand &command) {
+      return os << "{ ponder = " << command.ponder
+                << ", wtime_ms = " << command.wtime_ms
+                << ", btime_ms = " << command.btime_ms
+                << ", winc_ms = " << command.winc_ms
+                << ", binc_ms = " << command.binc_ms
+                << ", search_ms = " << command.search_ms
+                << ", moves_to_go = " << command.moves_to_go
+                << ", max_depth = " << command.max_depth
+                << ", max_nodes = " << command.max_nodes << "}";
+    }
+  };
+
+  Board m_board;
+  bool m_is_new_game = true;
+  std::string m_last_position_line = "";
+
+  UCI() = default;
+
+  void loop();
+
+  void handle_position(const std::string &line);
+  void handle_go(const std::string &line);
+};
+
+inline void UCI::handle_position(const std::string &line) {
+  const std::vector<std::string> tokens = split(line);
+  m_is_new_game |= !line.starts_with(m_last_position_line);
+  if (m_is_new_game) {
+    // Parse the entire thing
+    const std::string fen = tokens[1] == "startpos"
+                                ? Board::start_fen
+                                : join(tokens.begin() + 2, tokens.begin() + 8);
+    const size_t next_idx = tokens[1] == "startpos" ? 3 : 9;
+    for (size_t idx = next_idx; idx < tokens.size(); ++idx) {
+      m_board.make_move(find_uci_move(m_board, tokens[idx]));
+    }
+    m_is_new_game = false;
+  } else {
+    // Parse the last two moves and play it onto the cached position
+    const size_t num_tokens = tokens.size();
+    m_board.make_move(find_uci_move(m_board, tokens[num_tokens - 2]));
+    m_board.make_move(find_uci_move(m_board, tokens[num_tokens - 1]));
+  }
+  m_last_position_line = line;
+}
+
+inline void UCI::handle_go(const std::string &line) {
+  const std::vector<std::string> tokens = split(line);
+  assert(tokens[0] == "go");
+  GoCommand command;
+  for (size_t idx = 1; idx < tokens.size(); ++idx) {
+    const std::string &token = tokens[idx];
+    if (token == "wtime")
+      command.wtime_ms = std::stoi(tokens[++idx]);
+    else if (token == "btime")
+      command.btime_ms = std::stoi(tokens[++idx]);
+    else if (token == "winc")
+      command.winc_ms = std::stoi(tokens[++idx]);
+    else if (token == "binc")
+      command.binc_ms = std::stoi(tokens[++idx]);
+    else if (token == "movestogo")
+      command.moves_to_go = std::stoi(tokens[++idx]);
+    else if (token == "depth")
+      command.max_depth = std::stoi(tokens[++idx]);
+    else if (token == "nodes")
+      command.max_nodes = std::stoi(tokens[++idx]);
+    else if (token == "movetime")
+      command.search_ms = std::stoi(tokens[++idx]);
+    else if (token == "infinite")
+      command.search_ms = std::numeric_limits<int>::max();
+    else
+      std::cerr << "WARN: Unknown go token: '" << token << "'" << std::endl;
+  }
+
+  if (command.search_ms == -1) {
+    const int my_time =
+        m_board.m_side_to_move == White ? command.wtime_ms : command.btime_ms;
+    const int my_inc =
+        m_board.m_side_to_move == White ? command.winc_ms : command.binc_ms;
+    command.search_ms = my_time / 40.0 + my_inc * 0.9;
+  }
+
+  // TODO: For now, restrict searches to 10 seconds since we don't have 'stop'
+  command.search_ms = std::min(10'000, command.search_ms);
+
+  std::cerr << command << std::endl;
+  alpha_beta_search(m_board, command.max_depth, command.search_ms);
+}
+
+inline void UCI::loop() {
+  std::cout << "id name magnum_carl" << std::endl;
+  std::cout << "id author Nathan Lo" << std::endl;
+  std::cout << "uciok" << std::endl;
+
+  std::string line;
+  while (std::getline(std::cin, line)) {
     if (line == "isready") {
-      out << "readyok" << std::endl;
+      std::cout << "readyok" << std::endl;
     } else if (line == "ucinewgame") {
-      is_new_game = true;
+      m_is_new_game = true;
     } else if (line.starts_with("position")) {
-      const std::vector<std::string> tokens = split(line);
-      is_new_game |= !line.starts_with(last_position_line);
-      if (is_new_game) {
-        // Parse the entire thing
-        const std::string fen =
-            tokens[1] == "startpos"
-                ? Board::start_fen
-                : join(tokens.begin() + 2, tokens.begin() + 8);
-        const size_t next_idx = tokens[1] == "startpos" ? 3 : 9;
-        for (size_t idx = next_idx; idx < tokens.size(); ++idx) {
-          board.make_move(find_uci_move(board, tokens[idx]));
-        }
-        is_new_game = false;
-      } else {
-        // Parse the last move and play it onto the cached position
-        board.make_move(find_uci_move(board, tokens.back()));
-      }
-      last_position_line = line;
+      handle_position(line);
     } else if (line.starts_with("go")) {
-      // TODO: Parse the go command and kick off the appropriate search command
-
+      handle_go(line);
     } else if (line == "stop") {
       // TODO: Interrupt pondering
     } else if (line == "quit")

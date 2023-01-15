@@ -45,11 +45,16 @@ int main(int argc, char *argv[]) {
 
   std::string line;
   while (std::getline(std::cin, line)) {
-    if (line == "debug")
+    if (line == "exit" || line == "quit") {
+      break;
+    } else if (line == "debug") {
       print_debug_info();
-    else if (line == "uci")
-      uci_loop(std::cin, std::cout);
-    else
+      break;
+    } else if (line == "uci") {
+      UCI().loop();
+      break;
+    } else {
       std::cout << "Unknown command: " << line << std::endl;
+    }
   }
 }
