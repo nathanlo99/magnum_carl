@@ -2,9 +2,11 @@
 #pragma once
 
 #include "board.hpp"
+#include "piece.hpp"
 #include "transposition_table.hpp"
 
 #include <algorithm>
+#include <unordered_set>
 
 static std::atomic<bool> always_false = false;
 
@@ -26,6 +28,7 @@ struct search_info_t {
       stopped = get_time_ms() >= stop_time;
   }
 
+  inline long long search_time() const { return get_time_ms() - start_time; }
   inline bool should_stop() const { return force_stop || stopped; }
 };
 
@@ -36,10 +39,32 @@ inline std::string score_to_string(const int score) {
     return "mate " + std::to_string(distance_to_mate / 2 + 1);
   } else if (score < -MateScore + MaxMateDepth) {
     const int distance_to_mate = MateScore + score;
-    return "mated " + std::to_string(distance_to_mate / 2);
+    return "mate " + std::to_string(-distance_to_mate / 2);
   } else {
     return "cp " + std::to_string(score);
   }
+}
+
+inline void print_pv(std::ostream &out, Board &board) {
+  std::vector<Move> pv_moves;
+  std::unordered_set<hash_t> pv_hashes;
+  while (true) {
+    if (pv_hashes.count(board.m_hash) > 0)
+      break;
+    pv_hashes.insert(board.m_hash);
+
+    const auto &[has_tt_entry, tt_entry] = tt_probe_entry(board.m_hash);
+    if (!has_tt_entry || tt_entry.flag != TTEntryExact)
+      break;
+
+    out << tt_entry.move.to_uci() << " ";
+    pv_moves.push_back(tt_entry.move);
+    board.make_move(tt_entry.move);
+  }
+  for (auto it = pv_moves.rbegin(); it != pv_moves.rend(); ++it) {
+    board.unmake_move(*it);
+  }
+  out << std::endl;
 }
 
 // Given a board, the current move stored in the transposition table, and some
@@ -51,47 +76,38 @@ inline int compute_move_score(Board &board, const Move tt_move, const Move move,
   int result = 0;
 
   if (move == tt_move) [[unlikely]]
-    return 2000;
+    return 10000;
+
+  if (move_resulted_in_check)
+    result += 500;
+
+  if (move.is_some_promotion())
+    result += 100 * normalized_piece_value_table[move.promotion_piece()];
 
   if (move.is_capture()) {
-    result += 1000;
     // The largest contribution from captures + promotions is
     //  40 if a queen is captured
     //  10 if captured by a pawn
     // 400 if promoting to a queen
     // ---
     // 450 in total
-    if (move.type == EnPassant) {
-      result += 90;
-      return result;
-    } else {
-      const piece_t moved_piece = move.moved_piece,
-                    captured_piece = board.piece_at_slow(move.target);
-      result += 10 * normalized_piece_value_table[captured_piece];
-      result += 10 - normalized_piece_value_table[moved_piece];
-    }
-  } else {
-    if (move_resulted_in_check) {
-      result += 500;
-    }
-    if (move_resulted_in_captures) {
-      // Search moves which result in captures first, since these are simpler
-      // and mostly interesting
-      result += 100;
-    } else if (piece_is_pawn(move.moved_piece)) {
-      // Nudge quiet move searches in favour of changing the fifty move counter
-      // NOTE: This has the intended side-effect of playing more "interesting"
-      // moves if lots of quiet moves tie in evaluation
-      result += 50;
-    }
-  }
+    const piece_t moved_piece = move.moved_piece,
+                  captured_piece = move.type == EnPassant
+                                       ? WhitePawn
+                                       : board.piece_at_slow(move.target);
+    const int moved_piece_value = normalized_piece_value_table[moved_piece];
+    const int captured_piece_value =
+        normalized_piece_value_table[captured_piece];
 
-  // Promotions, regardless of whether they are captures, are usually very
-  // interesting
+    // NOTE: The colour of the captured pawn in an en-passant doesn't matter
+    // as we ignore colour when we normalize
+    result += 10 * captured_piece_value;
+    result += 10 - moved_piece_value;
 
-  // NOTE: This adds at most 400 points
-  if (move.is_some_promotion()) {
-    result += 100 * normalized_piece_value_table[move.promotion_piece()];
+    if (captured_piece_value >= moved_piece_value)
+      result += 1000;
+    else
+      result -= 10000;
   }
 
   return result;
@@ -266,7 +282,7 @@ inline int alpha_beta_evaluate(Board &board, search_info_t &search_info,
     int score = 0;
     if (have_improved_alpha) {
       score = -alpha_beta_evaluate(board, search_info, current_depth + 1,
-                                   max_depth, -(alpha + 1), -alpha);
+                                   max_depth, -(alpha + 5), -alpha);
       if (score > alpha && score < beta)
         score = -alpha_beta_evaluate(board, search_info, current_depth + 1,
                                      max_depth, -beta, -alpha);
@@ -300,6 +316,8 @@ inline int alpha_beta_evaluate(Board &board, search_info_t &search_info,
 
 inline Move alpha_beta_search(Board &board, int max_depth,
                               int search_ms = 100'000'000) {
+  log() << "Starting search to max depth " << max_depth << " for " << search_ms
+        << " ms" << std::endl;
   search_info_t search_info(search_ms);
   Move best_move;
   int alpha = -MateScore, beta = MateScore;
@@ -327,14 +345,28 @@ inline Move alpha_beta_search(Board &board, int max_depth,
     if (current_best_move.is_valid())
       best_move = current_best_move;
 
-    std::cout << "depth " << depth << " pv_move " << best_move << " score "
-              << score_to_string(score) << std::endl;
+    // depth, time, nodes, score, nps, pv
+    const auto nodes_per_second =
+        search_info.num_nodes / search_info.search_time() * 1000;
+    std::cout << "info time " << search_info.search_time() << " depth " << depth
+              << " nodes " << search_info.num_nodes << " score "
+              << score_to_string(score) << " nps " << nodes_per_second
+              << " pv ";
+    print_pv(std::cout, board);
+
+    log() << "info time " << search_info.search_time() << " depth " << depth
+          << " nodes " << search_info.num_nodes << " score "
+          << score_to_string(score) << " nps " << nodes_per_second << " pv ";
+    print_pv(log(), board);
 
     // Don't search deeper than the best mating sequence we've found so far
     // NOTE: If anything goes wrong with mating evaluations, remove this line
     // first before debugging
     if (score > MateScore - depth || score < -MateScore + depth)
-      break;
+      return best_move;
+
+    if (depth >= 2 && search_info.should_stop()) [[unlikely]]
+      return best_move;
   }
 
   return best_move;

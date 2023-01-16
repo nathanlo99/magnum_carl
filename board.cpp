@@ -197,6 +197,8 @@ inline int Board::get_piece_value(const piece_t piece,
 
 int Board::static_evaluate() const {
   int evaluation = 0;
+
+  // 1. Compute material imbalance
   for (piece_t piece = WhitePawn; piece <= BlackKing; ++piece) {
     bitboard_t bitboard = m_bitboards[piece];
     while (bitboard) {
@@ -204,6 +206,83 @@ int Board::static_evaluate() const {
       evaluation += get_piece_value(piece, sq);
     }
   }
+
+  constexpr int doubled_pawn_penalty = 10, isolated_pawn_penalty = -10,
+                bishop_pair_bonus = 10;
+  constexpr std::array<int, 64> passed_pawn_bonus = {
+      0,   0,   0,   0,   0,   0,   0,   0,   //
+      5,   5,   5,   5,   5,   5,   5,   5,   //
+      10,  10,  10,  10,  10,  10,  10,  10,  //
+      20,  20,  20,  20,  20,  20,  20,  20,  //
+      35,  35,  35,  35,  35,  35,  35,  35,  //
+      60,  60,  60,  60,  60,  60,  60,  60,  //
+      100, 100, 100, 100, 100, 100, 100, 100, //
+      0,   0,   0,   0,   0,   0,   0,   0,   //
+  };
+
+  // 2. Doubled pawns
+  for (int file = 0; file < 8; ++file) {
+    const int num_white_pawns =
+        bit_count(m_bitboards[WhitePawn] & file_mask[file]);
+    const int num_black_pawns =
+        bit_count(m_bitboards[BlackPawn] & file_mask[file]);
+    if (num_white_pawns >= 2)
+      evaluation -= num_white_pawns * doubled_pawn_penalty;
+    if (num_black_pawns >= 2)
+      evaluation += num_black_pawns * doubled_pawn_penalty;
+  }
+
+  // 3. Isolated and passed pawns
+  bitboard_t white_pawns = m_bitboards[WhitePawn];
+  while (white_pawns) {
+    const square_t pawn = pop_bit(white_pawns);
+    // A pawn is isolated if it has no pawns of the same colour in adjacent
+    // files
+    const bool is_isolated =
+        (m_bitboards[WhitePawn] & isolated_pawn_mask[pawn]) == 0;
+    if (is_isolated) {
+      log_print("Isolated white pawn on " << square_to_string(pawn));
+      evaluation += isolated_pawn_penalty;
+    }
+
+    // A pawn is passed if it has no pawns of the opposite colour in front of
+    // it, in any adjacent file
+    const bool is_passed =
+        (m_bitboards[BlackPawn] & passed_pawn_mask[White][pawn]) == 0;
+    if (is_passed) {
+      log_print("Passed white pawn on "
+                << square_to_string(pawn)
+                << ": bonus = " << passed_pawn_bonus[pawn]);
+      evaluation += passed_pawn_bonus[pawn];
+    }
+  }
+
+  bitboard_t black_pawns = m_bitboards[BlackPawn];
+  while (black_pawns) {
+    const square_t pawn = pop_bit(black_pawns);
+    const bool is_isolated =
+        (m_bitboards[BlackPawn] & isolated_pawn_mask[pawn]) == 0;
+    if (is_isolated)
+      evaluation -= isolated_pawn_penalty;
+
+    const bool is_passed =
+        (m_bitboards[WhitePawn] & passed_pawn_mask[Black][pawn]) == 0;
+    if (is_passed)
+      evaluation -= passed_pawn_bonus[pawn ^ 56];
+  }
+
+  // 4. Bishop pairs
+  const bool white_has_bishop_pair =
+      ((m_bitboards[WhiteBishop] & white_squares) != 0) &&
+      ((m_bitboards[WhiteBishop] & black_squares) != 0);
+  const bool black_has_bishop_pair =
+      ((m_bitboards[BlackBishop] & white_squares) != 0) &&
+      ((m_bitboards[BlackBishop] & black_squares) != 0);
+  if (white_has_bishop_pair)
+    evaluation += bishop_pair_bonus;
+  if (black_has_bishop_pair)
+    evaluation -= bishop_pair_bonus;
+
   return m_side_to_move == White ? evaluation : -evaluation;
 }
 

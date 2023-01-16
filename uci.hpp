@@ -128,7 +128,7 @@ inline void UCI::handle_go(const std::string &line) {
     else if (token == "movetime")
       command.search_ms = std::stoi(tokens[++idx]);
     else if (token == "infinite")
-      command.search_ms = std::numeric_limits<int>::max();
+      command.search_ms = 10'000; // Restrict since we don't have 'stop'
     else
       std::cerr << "WARN: Unknown go token: '" << token << "'" << std::endl;
   }
@@ -138,14 +138,14 @@ inline void UCI::handle_go(const std::string &line) {
         m_board.m_side_to_move == White ? command.wtime_ms : command.btime_ms;
     const int my_inc =
         m_board.m_side_to_move == White ? command.winc_ms : command.binc_ms;
-    command.search_ms = my_time / 40.0 + my_inc * 0.9;
+    command.search_ms = std::max(1000, my_time - 1000) / 40.0 + my_inc * 0.9;
   }
 
-  // TODO: For now, restrict searches to 10 seconds since we don't have 'stop'
-  command.search_ms = std::min(10'000, command.search_ms);
-
-  std::cerr << command << std::endl;
-  alpha_beta_search(m_board, command.max_depth, command.search_ms);
+  log() << "Received go command: " << command << std::endl;
+  const Move best_move =
+      alpha_beta_search(m_board, command.max_depth, command.search_ms);
+  log() << "Sending best move: " << best_move.to_uci() << std::endl;
+  std::cout << "bestmove " << best_move.to_uci() << std::endl;
 }
 
 inline void UCI::loop() {
@@ -155,6 +155,7 @@ inline void UCI::loop() {
 
   std::string line;
   while (std::getline(std::cin, line)) {
+    log() << "Received line '" << line << "'" << std::endl;
     if (line == "isready") {
       std::cout << "readyok" << std::endl;
     } else if (line == "ucinewgame") {
@@ -168,4 +169,5 @@ inline void UCI::loop() {
     } else if (line == "quit")
       break;
   }
+  log() << "Terminating session" << std::endl;
 }
