@@ -71,8 +71,7 @@ inline void print_pv(std::ostream &out, Board &board) {
 // flags indicating interesting things about the move, compute its move-ordering
 // score
 inline int compute_move_score(Board &board, const Move tt_move, const Move move,
-                              const bool move_resulted_in_check,
-                              const bool move_resulted_in_captures) {
+                              const bool move_resulted_in_check) {
   int result = 0;
 
   if (move == tt_move) [[unlikely]]
@@ -85,6 +84,7 @@ inline int compute_move_score(Board &board, const Move tt_move, const Move move,
     result += 100 * normalized_piece_value_table[move.promotion_piece()];
 
   if (move.is_capture()) {
+    result += 1000;
     // The largest contribution from captures + promotions is
     //  40 if a queen is captured
     //  10 if captured by a pawn
@@ -103,11 +103,6 @@ inline int compute_move_score(Board &board, const Move tt_move, const Move move,
     // as we ignore colour when we normalize
     result += 10 * captured_piece_value;
     result += 10 - moved_piece_value;
-
-    if (captured_piece_value >= moved_piece_value)
-      result += 1000;
-    else
-      result -= 10000;
   }
 
   return result;
@@ -127,15 +122,13 @@ class MoveHeap {
     inline Move operator*() const {
       // Get the move with the highest score in data[start_idx..] and move it to
       // index start_idx
-      const auto it = std::max_element(
-          m_heap.data.begin() + m_start_idx,
-          m_heap.data.begin() + m_heap.num_moves,
-          [](const std::pair<Move, int> &a, const std::pair<Move, int> &b) {
-            return a.second < b.second;
-          });
-
-      std::swap(*it, m_heap.data[m_start_idx]);
-      return m_heap.data[m_start_idx].first;
+      const auto start = m_heap.data.begin() + m_start_idx,
+                 end = m_heap.data.begin() + m_heap.num_moves;
+      for (auto it = start; it != end; ++it) {
+        if (it->second > start->second)
+          std::swap(*it, *start);
+      }
+      return start->first;
     }
 
     inline MoveHeapIterator &operator++() {
@@ -158,14 +151,15 @@ public:
         continue;
       }
 
-      const bool move_resulted_in_captures = board.has_legal_capture();
       const bool move_resulted_in_check = board.current_player_in_check();
 
+      // NOTE: compute_move_score relies on the board state before the move is
+      // played, so we have to unmake the move before calling compute_move_score
       board.unmake_move(move);
 
-      data[num_moves++] = std::make_pair(
-          move, compute_move_score(board, tt_move, move, move_resulted_in_check,
-                                   move_resulted_in_captures));
+      data[num_moves++] =
+          std::make_pair(move, compute_move_score(board, tt_move, move,
+                                                  move_resulted_in_check));
     }
   }
 
@@ -235,10 +229,8 @@ inline int alpha_beta_evaluate(Board &board, search_info_t &search_info,
   // it in QS, since every capture and queen promotion will reset these counters
   const auto &[has_simple_eval, simple_eval] =
       board.compute_simple_evaluation();
-  if (has_simple_eval) [[unlikely]] {
-    log_print("alpha_beta_evaluate | done - simple_eval");
+  if (has_simple_eval) [[unlikely]]
     return simple_eval;
-  }
 
   search_info.num_nodes++;
 
@@ -270,10 +262,8 @@ inline int alpha_beta_evaluate(Board &board, search_info_t &search_info,
 
   MoveHeap heap(board, tt_move, start_ptr, end_ptr);
   // No legal moves: the game has ended in either a checkmate or stalemate
-  if (heap.empty()) [[unlikely]] {
-    log_print("alpha_beta_evaluate | done - terminal");
+  if (heap.empty()) [[unlikely]]
     return in_check ? -MateScore + current_depth : DrawScore;
-  }
 
   bool have_improved_alpha = false;
   Move best_move;
@@ -282,7 +272,7 @@ inline int alpha_beta_evaluate(Board &board, search_info_t &search_info,
     int score = 0;
     if (have_improved_alpha) {
       score = -alpha_beta_evaluate(board, search_info, current_depth + 1,
-                                   max_depth, -(alpha + 5), -alpha);
+                                   max_depth, -(alpha + 1), -alpha);
       if (score > alpha && score < beta)
         score = -alpha_beta_evaluate(board, search_info, current_depth + 1,
                                      max_depth, -beta, -alpha);
@@ -320,6 +310,7 @@ inline Move alpha_beta_search(Board &board, int max_depth,
         << " ms" << std::endl;
   search_info_t search_info(search_ms);
   Move best_move;
+
   int alpha = -MateScore, beta = MateScore;
   for (int depth = 1; depth <= max_depth; ++depth) {
     int score = 0, aspiration_window_size = 10;

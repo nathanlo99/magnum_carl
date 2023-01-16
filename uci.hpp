@@ -91,6 +91,8 @@ inline void UCI::handle_position(const std::string &line) {
     const std::string fen = tokens[1] == "startpos"
                                 ? Board::start_fen
                                 : join(tokens.begin() + 2, tokens.begin() + 8);
+    log() << "Parsing FEN: '" << fen << "'" << std::endl;
+    m_board = Board(fen);
     const size_t next_idx = tokens[1] == "startpos" ? 3 : 9;
     for (size_t idx = next_idx; idx < tokens.size(); ++idx) {
       m_board.make_move(find_uci_move(m_board, tokens[idx]));
@@ -138,7 +140,7 @@ inline void UCI::handle_go(const std::string &line) {
         m_board.m_side_to_move == White ? command.wtime_ms : command.btime_ms;
     const int my_inc =
         m_board.m_side_to_move == White ? command.winc_ms : command.binc_ms;
-    command.search_ms = std::max(1000, my_time - 1000) / 40.0 + my_inc * 0.9;
+    command.search_ms = (my_time - 1000) / 60.0 + my_inc * 0.9;
   }
 
   log() << "Received go command: " << command << std::endl;

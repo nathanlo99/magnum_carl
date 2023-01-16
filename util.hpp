@@ -11,7 +11,7 @@
 // material evaluation
 constexpr int MateScore = 20'000;
 constexpr int MaxMateDepth = 200; // Maximum number of plies to mate
-constexpr int DrawScore = -25;    // Negative for contempt
+constexpr int DrawScore = -10;    // Negative for contempt
 constexpr int UnknownScore = 30'000;
 
 #define __SHORT_FILE__ strrchr("/" __FILE__, '/') + 1
