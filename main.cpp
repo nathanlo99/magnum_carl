@@ -30,6 +30,21 @@ inline void print_debug_info() {
   std::cout << "sizeof(bitboard_t) = " << sizeof(bitboard_t) << std::endl;
   std::cout << std::endl;
 
+  {
+    Board start_pos;
+    const auto start_ms = get_time_ms();
+    const auto perft_result = perft(start_pos, 6);
+    const auto end_ms = get_time_ms();
+    const auto elapsed_seconds = (end_ms - start_ms) / 1000.0;
+
+    std::cout << perft_result << '\n';
+    std::cout << "Done in " << elapsed_seconds << " seconds\n";
+
+    const int positions_per_second = perft_result / elapsed_seconds;
+    std::cout << "Positions per second: " << positions_per_second << std::endl;
+    return;
+  }
+
   Board board;
   std::cout << board << std::endl;
   while (board.check_result() == InProgress) {

@@ -205,6 +205,7 @@ inline int quiescence_evaluate(Board &board, search_info_t &search_info,
   }
 
   // Search only captures and pawn promotions
+  int best_score = -MateScore;
   for (const auto &move : heap) {
     board.make_move(move);
     const int score = -quiescence_evaluate(board, search_info,
@@ -212,11 +213,14 @@ inline int quiescence_evaluate(Board &board, search_info_t &search_info,
     board.unmake_move(move);
 
     if (score >= beta)
-      return beta;
-    if (score > alpha)
-      alpha = score;
+      return score;
+    if (score > best_score) {
+      best_score = score;
+      if (score > alpha)
+        alpha = score;
+    }
   }
-  return alpha;
+  return best_score;
 }
 
 // Fail-soft alpha-beta
@@ -266,6 +270,7 @@ inline int alpha_beta_evaluate(Board &board, search_info_t &search_info,
     return in_check ? -MateScore + current_depth : DrawScore;
 
   bool have_improved_alpha = false;
+  int best_score = -MateScore;
   Move best_move;
   for (const auto &move : heap) {
     board.make_move(move);
@@ -282,26 +287,27 @@ inline int alpha_beta_evaluate(Board &board, search_info_t &search_info,
     }
     board.unmake_move(move);
 
-    if (score > alpha) {
-      have_improved_alpha = true;
-      alpha = score;
+    if (score >= beta) {
+      if (!search_info.should_stop())
+        tt_write(board.m_hash, current_depth, max_depth, TTEntryBeta, score,
+                 move);
+      return score;
+    }
+    if (score > best_score) {
+      best_score = score;
       best_move = move;
-
-      if (score >= beta) {
-        if (!search_info.should_stop())
-          tt_write(board.m_hash, current_depth, max_depth, TTEntryBeta, score,
-                   move);
-        return beta;
+      if (score > alpha) {
+        have_improved_alpha = true;
+        alpha = score;
       }
     }
   }
 
   if (!search_info.should_stop())
     tt_write(board.m_hash, current_depth, max_depth,
-             have_improved_alpha ? TTEntryExact : TTEntryAlpha, alpha,
+             have_improved_alpha ? TTEntryExact : TTEntryAlpha, best_score,
              best_move);
-
-  return alpha;
+  return best_score;
 }
 
 inline Move alpha_beta_search(Board &board, int max_depth,

@@ -130,7 +130,7 @@ inline void UCI::handle_go(const std::string &line) {
     else if (token == "movetime")
       command.search_ms = std::stoi(tokens[++idx]);
     else if (token == "infinite")
-      command.search_ms = 10'000; // Restrict since we don't have 'stop'
+      command.search_ms = std::numeric_limits<int>::max();
     else
       std::cerr << "WARN: Unknown go token: '" << token << "'" << std::endl;
   }
