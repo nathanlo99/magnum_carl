@@ -67,45 +67,41 @@ inline void print_pv(std::ostream &out, Board &board) {
   out << std::endl;
 }
 
+// table[victim][attacker]
+constexpr inline std::array<std::array<int, 12>, 12> mvv_lva_table = {
+    std::array<int, 12>{00, 00, 00, 00, 00, 00, 15, 14, 13, 12, 11, 10},
+    std::array<int, 12>{00, 00, 00, 00, 00, 00, 25, 24, 23, 22, 21, 20},
+    std::array<int, 12>{00, 00, 00, 00, 00, 00, 35, 34, 33, 32, 31, 30},
+    std::array<int, 12>{00, 00, 00, 00, 00, 00, 45, 44, 43, 42, 41, 40},
+    std::array<int, 12>{00, 00, 00, 00, 00, 00, 55, 54, 53, 52, 51, 50},
+    std::array<int, 12>{00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00},
+    std::array<int, 12>{15, 14, 13, 12, 11, 10, 00, 00, 00, 00, 00, 00},
+    std::array<int, 12>{25, 24, 23, 22, 21, 20, 00, 00, 00, 00, 00, 00},
+    std::array<int, 12>{35, 34, 33, 32, 31, 30, 00, 00, 00, 00, 00, 00},
+    std::array<int, 12>{45, 44, 43, 42, 41, 40, 00, 00, 00, 00, 00, 00},
+    std::array<int, 12>{55, 54, 53, 52, 51, 50, 00, 00, 00, 00, 00, 00},
+    std::array<int, 12>{00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00},
+};
+
 // Given a board, the current move stored in the transposition table, and some
 // flags indicating interesting things about the move, compute its move-ordering
 // score
 inline int compute_move_score(Board &board, const Move tt_move, const Move move,
                               const bool move_resulted_in_check) {
-  int result = 0;
-
   if (move == tt_move) [[unlikely]]
     return 10000;
 
-  if (move_resulted_in_check)
-    result += 500;
-
-  if (move.is_some_promotion())
-    result += 100 * normalized_piece_value_table[move.promotion_piece()];
-
   if (move.is_capture()) {
-    result += 1000;
-    // The largest contribution from captures + promotions is
-    //  40 if a queen is captured
-    //  10 if captured by a pawn
-    // 400 if promoting to a queen
-    // ---
-    // 450 in total
-    const piece_t moved_piece = move.moved_piece,
-                  captured_piece = move.type == EnPassant
-                                       ? WhitePawn
-                                       : board.piece_at_slow(move.target);
-    const int moved_piece_value = normalized_piece_value_table[moved_piece];
-    const int captured_piece_value =
-        normalized_piece_value_table[captured_piece];
-
-    // NOTE: The colour of the captured pawn in an en-passant doesn't matter
-    // as we ignore colour when we normalize
-    result += 10 * captured_piece_value;
-    result += 10 - moved_piece_value;
+    if (move.type == EnPassant) {
+      return 1000 + mvv_lva_table[WhitePawn][BlackPawn];
+    } else {
+      const piece_t moved_piece = move.moved_piece,
+                    captured_piece = board.piece_at_slow(move.target);
+      return 1000 + mvv_lva_table[captured_piece][moved_piece];
+    }
   }
 
-  return result;
+  return 0;
 }
 
 class MoveHeap {
