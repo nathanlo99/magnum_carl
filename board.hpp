@@ -76,6 +76,7 @@ struct Board {
 
   static constexpr const size_t max_moves_in_game = 512;
   static constexpr const size_t max_moves_in_position = 256;
+  static constexpr const size_t max_search_depth = 64;
 
 public:
   // Standard data

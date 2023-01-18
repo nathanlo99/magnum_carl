@@ -152,8 +152,7 @@ constexpr inline void init_slider_attack_tables() {
     { // Bishops
       const bitboard_t attack_mask = bishop_masks[sq];
       const size_t relevant_bits = bishop_num_relevant_bits[sq];
-      if (relevant_bits == 0)
-        __builtin_unreachable();
+      __builtin_assume(relevant_bits > 0);
       const int max_entries = 1 << relevant_bits;
       assert(max_entries <= 512);
 
@@ -173,8 +172,7 @@ constexpr inline void init_slider_attack_tables() {
     { // Rooks
       const bitboard_t attack_mask = rook_masks[sq];
       const size_t relevant_bits = rook_num_relevant_bits[sq];
-      if (relevant_bits == 0)
-        __builtin_unreachable();
+      __builtin_assume(relevant_bits > 0);
       const int max_entries = 1 << relevant_bits;
       assert(max_entries <= 4096);
 

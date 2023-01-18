@@ -7,11 +7,11 @@
 #include "board.hpp"
 
 inline uint64_t perft(Board &board, const size_t depth) {
-  if (depth == 0)
+  if (depth == 0) [[unlikely]]
     return 1;
   std::array<Move, Board::max_moves_in_position> moves;
   Move *start_ptr = &moves[0], *end_ptr = board.legal_moves(start_ptr);
-  if (depth == 1)
+  if (depth == 1) [[unlikely]]
     return end_ptr - start_ptr;
 
   uint64_t result = 0;

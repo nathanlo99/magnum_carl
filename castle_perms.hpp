@@ -31,6 +31,7 @@ inline std::string castle_perms_to_string(const castle_t perms) {
   if (perms == 0)
     return "-";
   std::string result = "";
+  result.reserve(4);
   if (perms & WhiteShortCastle)
     result.push_back('K');
   if (perms & WhiteLongCastle)

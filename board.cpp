@@ -1020,6 +1020,7 @@ void Board::place_piece(const piece_t piece, const square_t sq) {
 // NOTE: This is generally slow, if the piece is known, use the version below
 template <bool update_hash>
 piece_t Board::remove_piece_slow(const square_t sq) {
+  // TODO: SIMD the operation of AND-ing with the single-bit mask?
   assert(get_bit(m_occupancies[Both], sq));
   for (piece_t piece = 0; piece < InvalidPiece; ++piece) {
     if (get_bit(m_bitboards[piece], sq)) {

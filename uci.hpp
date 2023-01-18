@@ -54,7 +54,7 @@ struct UCI {
     int binc_ms = 0;
     int search_ms = -1;
     int moves_to_go = 0;
-    int max_depth = Board::max_moves_in_game;
+    int max_depth = Board::max_search_depth;
     long long max_nodes = std::numeric_limits<long long>::max();
 
     friend std::ostream &operator<<(std::ostream &os,

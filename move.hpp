@@ -139,14 +139,6 @@ struct Move {
     return ss.str();
   }
 
-  inline std::string to_co456() const {
-    std::stringstream ss;
-    ss << square_to_string(source) << square_to_string(target);
-    if (is_some_promotion())
-      ss << piece_to_char(sided_piece<Black>(promotion_piece() % 6));
-    return ss.str();
-  }
-
   inline std::string to_long_string() const {
     std::stringstream ss;
     ss << "{";

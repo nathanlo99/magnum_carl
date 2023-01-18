@@ -122,8 +122,7 @@ inline int tt_probe_score(const hash_t hash, const int current_depth,
 
 inline std::pair<bool, tt_entry_t> tt_probe_entry(const hash_t hash) {
   const tt_entry_t &entry = tt_index(hash);
-  return (entry.hash == hash) ? std::make_pair(true, entry)
-                              : std::make_pair(false, tt_entry_t());
+  return std::make_pair(entry.hash == hash, entry);
 }
 
 inline void tt_write(const hash_t hash, const int current_depth,

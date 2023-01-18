@@ -88,7 +88,7 @@ constexpr std::array<int, 64> square_colour_table = {
 };
 
 constexpr inline square_t string_to_square(const std::string_view &s) {
-  if (s == "-")
+  if (s.size() == 1)
     return InvalidSquare;
   const auto row = s[0] - 'a', col = s[1] - '1';
   return row * 8 + col;
@@ -107,23 +107,19 @@ inline std::string square_to_string(const square_t sq) {
 }
 
 constexpr inline bool square_on_first_rank(const square_t sq) {
-  constexpr uint64_t mask = 0x0000'0000'0000'00FF;
-  return mask & (1ULL << sq);
+  return 0 <= sq && sq <= 7;
 }
 
 constexpr inline bool square_on_second_rank(const square_t sq) {
-  constexpr uint64_t mask = 0x0000'0000'0000'FF00;
-  return mask & (1ULL << sq);
+  return 8 <= sq && sq <= 15;
 }
 
 constexpr inline bool square_on_seventh_rank(const square_t sq) {
-  constexpr uint64_t mask = 0x00FF'0000'0000'0000;
-  return mask & (1ULL << sq);
+  return 48 <= sq && sq <= 55;
 }
 
 constexpr inline bool square_on_eighth_rank(const square_t sq) {
-  constexpr uint64_t mask = 0xFF00'0000'0000'0000;
-  return mask & (1ULL << sq);
+  return 56 <= sq && sq <= 63;
 }
 
 constexpr inline int square_colour(const square_t sq) {
